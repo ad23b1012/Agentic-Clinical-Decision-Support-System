@@ -1,0 +1,38 @@
+# -------------------------
+# Core backend
+# -------------------------
+fastapi
+uvicorn[standard]
+
+# -------------------------
+# LangChain / LangGraph
+# -------------------------
+langchain
+langgraph
+
+# -------------------------
+# File ingestion & OCR
+# -------------------------
+pdfplumber
+pytesseract
+pillow
+python-docx
+
+# -------------------------
+# Text processing
+# -------------------------
+regex
+
+# -------------------------
+# Databases
+# -------------------------
+firebase-admin
+neo4j
+qdrant-client
+
+# -------------------------
+# Utilities
+# -------------------------
+python-dotenv
+pydantic
+requests

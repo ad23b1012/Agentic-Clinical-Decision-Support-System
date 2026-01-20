@@ -1,0 +1,78 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# -------------------------
+# Virtual environments
+# -------------------------
+venv/
+.venv/
+env/
+ENV/
+
+# -------------------------
+# Environment & secrets
+# -------------------------
+.env
+.env.*
+firebase-key.json
+serviceAccountKey.json
+
+# -------------------------
+# OS / Editor
+# -------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# -------------------------
+# Logs
+# -------------------------
+*.log
+logs/
+
+# -------------------------
+# Data / Medical files
+# -------------------------
+data/
+datasets/
+samples/
+uploads/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.tiff
+*.dcm
+
+# -------------------------
+# Cache / Temp
+# -------------------------
+.cache/
+tmp/
+*.tmp
+
+# -------------------------
+# Neo4j / Vector DB
+# -------------------------
+neo4j_data/
+qdrant_data/
+
+# -------------------------
+# Test artifacts
+# -------------------------
+.coverage
+htmlcov/
+
+# -------------------------
+# Docker
+# -------------------------
+docker/.env
