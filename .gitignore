@@ -76,3 +76,5 @@ htmlcov/
 # Docker
 # -------------------------
 docker/.env
+
+req.txt

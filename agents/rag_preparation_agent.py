@@ -18,6 +18,8 @@ from typing import List, Dict
 from collections import defaultdict
 import uuid
 
+MAX_CHARS = 2000
+
 
 # -----------------------------
 # Public API
@@ -27,7 +29,7 @@ def prepare_rag_chunks(
     entities: List[Dict],
     doc_type: str = "clinical_note"
 ) -> List[Dict]:
-    """
+    """ 
     Converts extracted clinical entities into RAG-ready chunks.
     """
 
@@ -96,15 +98,21 @@ def _build_chunk(
     seen = set()
     for e in entities:
         ctx = e.get("context", "").strip()
-        if ctx and ctx not in seen:
+        norm = " ".join(ctx.lower().split()) #This avoids duplicate embeddings for trivial whitespace differences.
+        if norm not in seen:
             contexts.append(ctx)
-            seen.add(ctx)
+            seen.add(norm)
 
     if not contexts:
         return None
 
     # Assemble chunk text (light cleanup only)
+    contexts = sorted(contexts,key=lambda c: entities[0]["context"].find(c)) #This ensures: symptoms → labs → investigations → treatmen
     chunk_text = "\n".join(contexts)
+
+    if len(chunk_text) > MAX_CHARS:
+        chunk_text = chunk_text[:MAX_CHARS]
+
 
     # Collect entity metadata
     entity_names = []
@@ -123,7 +131,8 @@ def _build_chunk(
             labs.append({
                 "lab": e["normalized"],
                 "value": e.get("value"),
-                "unit": e.get("unit")
+                "unit": e.get("unit"),
+                "context": e.get("context")
             })
 
     # Build final chunk
@@ -162,49 +171,192 @@ def _generate_chunk_id(source: str, date: str, section: str) -> str:
 def main():
     # Simulated output from clinical_nlp_agent
     extracted_entities = [
-        {
-            "entity": "chest pain",
-            "normalized": "CHEST_PAIN",
-            "type": "symptom",
-            "negated": False,
-            "context": "Patient presents with chest pain and shortness of breath.",
-            "section": "review_of_systems",
-            "date": "2024-08-14",
-            "source": "sample_note.txt",
-        },
-        {
-            "entity": "shortness of breath",
-            "normalized": "SHORTNESS_OF_BREATH",
-            "type": "symptom",
-            "negated": False,
-            "context": "Patient presents with chest pain and shortness of breath.",
-            "section": "review_of_systems",
-            "date": "2024-08-14",
-            "source": "sample_note.txt",
-        },
-        {
-            "entity": "diabetes",
-            "normalized": "DIABETES",
-            "type": "condition",
-            "negated": False,
-            "context": "History of diabetes and hypertension.",
-            "section": "past_medical_history",
-            "date": "2024-08-14",
-            "source": "sample_note.txt",
-        },
-        {
-            "entity": "hemoglobin",
-            "normalized": "HEMOGLOBIN",
-            "type": "lab",
-            "negated": False,
-            "value": "10.2",
-            "unit": "g/dL",
-            "context": "Hemoglobin: 10.2 g/dL",
-            "section": "unspecified",
-            "date": "2024-08-14",
-            "source": "sample_note.txt",
-        },
-    ]
+
+    # -------------------------
+    # Document 1 – ER Visit
+    # -------------------------
+
+    {
+        "entity": "chest pain",
+        "normalized": "CHEST_PAIN",
+        "type": "symptom",
+        "negated": False,
+        "context": (
+            "Patient presents with acute onset chest pain radiating to the left arm, "
+            "associated with diaphoresis and nausea."
+        ),
+        "section": "review_of_systems",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+    {
+        "entity": "shortness of breath",
+        "normalized": "SHORTNESS_OF_BREATH",
+        "type": "symptom",
+        "negated": False,
+        "context": (
+            "Patient presents with acute onset chest pain radiating to the left arm, "
+            "associated with diaphoresis and nausea."
+        ),
+        "section": "review_of_systems",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+    {
+        "entity": "fever",
+        "normalized": "FEVER",
+        "type": "symptom",
+        "negated": True,
+        "context": (
+            "Denies fever, cough, or recent infection."
+        ),
+        "section": "review_of_systems",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+
+    # -------------------------
+    # Past Medical History
+    # -------------------------
+
+    {
+        "entity": "diabetes mellitus",
+        "normalized": "DIABETES_MELLITUS",
+        "type": "condition",
+        "negated": False,
+        "context": (
+            "Past medical history is significant for type 2 diabetes mellitus "
+            "and long-standing hypertension."
+        ),
+        "section": "past_medical_history",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+    {
+        "entity": "hypertension",
+        "normalized": "HYPERTENSION",
+        "type": "condition",
+        "negated": False,
+        "context": (
+            "Past medical history is significant for type 2 diabetes mellitus "
+            "and long-standing hypertension."
+        ),
+        "section": "past_medical_history",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+
+    # -------------------------
+    # Labs (with interpretation)
+    # -------------------------
+
+    {
+        "entity": "hemoglobin",
+        "normalized": "HEMOGLOBIN",
+        "type": "lab",
+        "negated": False,
+        "value": "9.8",
+        "unit": "g/dL",
+        "context": (
+            "Hemoglobin is 9.8 g/dL, which is below the normal reference range, "
+            "suggestive of anemia."
+        ),
+        "section": "investigation",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+    {
+        "entity": "troponin",
+        "normalized": "TROPONIN",
+        "type": "lab",
+        "negated": False,
+        "value": "1.2",
+        "unit": "ng/mL",
+        "context": (
+            "Cardiac troponin is elevated at 1.2 ng/mL, raising concern for myocardial injury."
+        ),
+        "section": "investigation",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+
+    # -------------------------
+    # Radiology Report (Narrative)
+    # -------------------------
+
+    {
+        "entity": "ct angiography",
+        "normalized": "CT_ANGIOGRAPHY",
+        "type": "procedure",
+        "negated": False,
+        "context": (
+            "CT angiography of the chest demonstrates no evidence of aortic dissection "
+            "or pulmonary embolism. Mild coronary artery calcifications are noted."
+        ),
+        "section": "radiology",
+        "date": "2024-08-14",
+        "source": "ct_report_1.txt",
+    },
+
+    # -------------------------
+    # Treatment
+    # -------------------------
+
+    {
+        "entity": "aspirin",
+        "normalized": "ASPIRIN",
+        "type": "medication",
+        "negated": False,
+        "context": (
+            "The patient was treated with aspirin and started on high-intensity statin therapy."
+        ),
+        "section": "treatment",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+    {
+        "entity": "atorvastatin",
+        "normalized": "ATORVASTATIN",
+        "type": "medication",
+        "negated": False,
+        "context": (
+            "The patient was treated with aspirin and started on high-intensity statin therapy."
+        ),
+        "section": "treatment",
+        "date": "2024-08-14",
+        "source": "er_note_1.txt",
+    },
+
+    # -------------------------
+    # Document 2 – Follow-up Visit
+    # -------------------------
+
+    {
+        "entity": "chest pain",
+        "normalized": "CHEST_PAIN",
+        "type": "symptom",
+        "negated": True,
+        "context": (
+            "On follow-up visit, the patient denies chest pain or shortness of breath."
+        ),
+        "section": "review_of_systems",
+        "date": "2024-08-21",
+        "source": "followup_note.txt",
+    },
+    {
+        "entity": "shortness of breath",
+        "normalized": "SHORTNESS_OF_BREATH",
+        "type": "symptom",
+        "negated": True,
+        "context": (
+            "On follow-up visit, the patient denies chest pain or shortness of breath."
+        ),
+        "section": "review_of_systems",
+        "date": "2024-08-21",
+        "source": "followup_note.txt",
+    },
+]
+
 
     chunks = prepare_rag_chunks(extracted_entities)
 
