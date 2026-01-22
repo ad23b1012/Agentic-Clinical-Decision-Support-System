@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai.types import EmbedContentConfig
 
-
 # -----------------------------
 # Configuration
 # -----------------------------
