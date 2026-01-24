@@ -1,0 +1,29 @@
+{
+  "doc_metadata": {
+    "source": "sample_note.txt",
+    "date": "2024-08-14",
+    "doc_type": "lab_report"
+  },
+  "entities": [
+    {
+      "type": "CONJUGATED BILIRUBIN",
+      "value": 7.79,
+      "unit": "mg/dl",
+      "normal_range": ""
+    },
+    {
+      "type": "SGOT",
+      "value": 162,
+      "unit": "U/L",
+      "normal_range": ""
+    },
+    {
+      "type": "ALBUMIN",
+      "value": 3.7,
+      "unit": "g/dl",
+      "normal_range": ""
+    }
+  ],
+  "residual_text": "",
+  "conclusion_text": "**Laboratory Results**\n\n- **Test code:** 9001-2008  \n- **Conjugated bilirubin:** 7.79\u202fmg/dL (high)  \n- **SGOT (AST):** 162\u202fU/L (high)  \n- **Albumin:** 3.7\u202fg/dL  \n\n*Note: The values are presented as reported. No interpretation or diagnosis is provided.*"
+}
