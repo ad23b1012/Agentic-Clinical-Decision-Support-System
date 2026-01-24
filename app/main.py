@@ -1,4 +1,5 @@
-# app/main.py
+from dotenv import load_dotenv
+load_dotenv()  # 🔥 MUST be first – loads .env for entire pipeline
 
 from pathlib import Path
 import json
@@ -25,6 +26,7 @@ def main():
         PROJECT_ROOT / "samples" / "report_1_medic.png",
     ]
 
+    # Convert to strings + validate
     file_paths = [str(p) for p in file_paths if p.exists()]
 
     if not file_paths:
@@ -32,7 +34,7 @@ def main():
         return
 
     # -------------------------------------------------
-    # INITIALIZE STATE
+    # INITIALIZE STATE + ORCHESTRATOR
     # -------------------------------------------------
     state = ClinicalState(file_paths=file_paths)
     orchestrator = ClinicalOrchestrator()
@@ -41,7 +43,7 @@ def main():
     # STEP 1: INGESTION
     # -------------------------------------------------
     state = orchestrator.run_ingestion(state)
-    print(f"\n[INFO] Ingested {len(state.raw_documents)} document(s)\n")
+    print(f"\n[INFO] Ingested {len(state.raw_documents)} document(s)")
 
     if not state.raw_documents:
         print("[ERROR] No documents ingested. Exiting.")
@@ -51,31 +53,45 @@ def main():
     # STEP 2: CLINICAL NLP
     # -------------------------------------------------
     state = orchestrator.run_clinical_nlp(state)
-    print(f"[INFO] NLP processed {len(state.nlp_results)} document(s)\n")
+    print(f"[INFO] NLP processed {len(state.nlp_results)} document(s)")
+
+    if not state.nlp_results:
+        print("[ERROR] No NLP results produced. Exiting.")
+        return
 
     # -------------------------------------------------
     # STEP 3: EMBEDDING
     # -------------------------------------------------
     state = orchestrator.run_embedding(state)
-    print(f"[INFO] Generated embeddings for {len(state.embedding_results)} document(s)\n")
+    print(f"[INFO] Generated embeddings for {len(state.embedding_results)} document(s)")
+
+    if not state.embedding_results:
+        print("[ERROR] No embeddings generated. Exiting.")
+        return
 
     # -------------------------------------------------
-    # OUTPUT
+    # STEP 4: VECTOR STORE (PINECONE)
+    # -------------------------------------------------
+    state = orchestrator.run_vector_upsert(state)
+    print(f"[INFO] Upserted vectors for {len(state.vector_store_results)} document(s)\n")
+
+    # -------------------------------------------------
+    # OUTPUT SUMMARY
     # -------------------------------------------------
     for idx, item in enumerate(state.embedding_results, start=1):
         print("=" * 80)
-        print(f"Embedded Document {idx}")
+        print(f"Document {idx}")
         print(f"Source           : {item.get('source')}")
         print(f"Embedding Model  : {item.get('embedding_model')}")
         print(f"Num Vectors      : {item.get('num_embeddings')}")
         print("-" * 80)
 
-        # Preview first embedding only (safe)
+        # Safe preview of first vector only
         if item.get("embeddings"):
-            preview = item["embeddings"][0]
-            print("First Entity     :", preview.get("entity"))
-            print("Vector Dim       :", len(preview.get("embedding", [])))
-            print("Vector Preview   :", preview.get("embedding", [])[:10])
+            first = item["embeddings"][0]
+            print("First Entity :", first.get("entity"))
+            print("Vector Dim  :", len(first.get("embedding", [])))
+            print("Preview     :", first.get("embedding", [])[:10])
 
         print()
 
