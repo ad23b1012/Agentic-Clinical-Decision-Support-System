@@ -42,16 +42,16 @@ logs/
 # -------------------------
 # Data / Medical files
 # -------------------------
-data/
-datasets/
-samples/
-uploads/
-*.pdf
-*.png
-*.jpg
-*.jpeg
-*.tiff
-*.dcm
+# data/
+# datasets/
+#  samples/
+# uploads/
+# *.pdf
+# *.png
+# *.jpg
+# *.jpeg
+# *.tiff
+# *.dcm
 
 # -------------------------
 # Cache / Temp
