@@ -8,10 +8,11 @@ Responsibility:
 - Deterministic upsert only
 """
 
+from dotenv import load_dotenv
+load_dotenv()
 import os
 from typing import Dict, List
 from pinecone import Pinecone
-
 
 # =====================================================
 # CONFIG (loaded from .env)

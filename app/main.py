@@ -23,6 +23,10 @@ def main():
     # -------------------------------------------------
     file_paths = [
         PROJECT_ROOT / "samples" / "report_1_medic.png",
+        PROJECT_ROOT / "samples" / "report_2_medic.png",
+        PROJECT_ROOT / "samples" / "report_3.jpeg",
+        PROJECT_ROOT / "samples" / "report_4.jpeg",
+        PROJECT_ROOT / "samples" / "report_5.jpeg",
     ]
 
     # Convert to strings + validate

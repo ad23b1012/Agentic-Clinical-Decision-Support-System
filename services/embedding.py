@@ -14,7 +14,8 @@ Embedding Model:
 import os
 import json
 from typing import Dict, List, Union
-
+from dotenv import load_dotenv
+load_dotenv()
 # =====================================================
 # DEPENDENCY CHECK
 # =====================================================

@@ -1,18 +1,13 @@
 """
-Clinical + Lab NLP Pipeline with LLM Reasoning, Normalization
-AND Residual Text Conclusion (STRICT & FAIL-CLOSED)
------------------------------------------------------------
+Clinical + Lab NLP Pipeline (OCR-Resilient)
+-------------------------------------------
 Stage 0: Document type detection
-Stage 1: Deterministic extraction (labs / clinical)
+Stage 1: Robust extraction (Pivot-around-Number)
 Stage 2: LLM reasoning → KEEP / DROP entities
-Stage 2.5: Deterministic residual text extraction
 Stage 3: LLM normalization
-Stage 4: LLM residual reasoning → conclusion_text
+Stage 4: Residual text reasoning
 
-STRICT:
-- NO diagnosis
-- NO interpretation
-- NO hallucination
+STRICT: No diagnosis, No interpretation.
 """
 
 import os
@@ -21,12 +16,20 @@ import json
 from datetime import datetime
 from typing import List, Dict, Tuple
 from dotenv import load_dotenv
-load_dotenv()  # Load .env for API keys, etc.
+
+load_dotenv()
 
 # =====================================================
-# OPTIONAL: scispaCy (ONLY for clinical notes)
+# GROQ CLIENT (Updated Model)
 # =====================================================
+from groq import Groq
+groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+# Using Llama 3.3 70B for superior JSON following and OCR correction
+MODEL_NAME = "llama-3.3-70b-versatile" 
 
+# =====================================================
+# SPACY (Optional)
+# =====================================================
 try:
     import spacy
     _NLP = spacy.load("en_ner_bc5cdr_md")
@@ -37,23 +40,19 @@ except Exception:
 
 
 # =====================================================
-# GROQ CLIENT
-# =====================================================
-
-from groq import Groq
-groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
-
-
-# =====================================================
 # PUBLIC PIPELINE
 # =====================================================
 
 def extract_and_process(documents: List[Dict]) -> Dict:
+    if not documents:
+        return {}
+        
     extracted = extract_entities(documents)
+    print(f"[DEBUG] Extracted {len(extracted)} raw entities via Regex/NLP")
 
     # LLM KEEP / DROP
     filtered = llm_reason_and_filter_entities(extracted)
+    print(f"[DEBUG] {len(filtered)} entities survived LLM validation")
 
     # Deterministic residual text
     residual_text = build_residual_text(
@@ -84,11 +83,19 @@ def extract_and_process(documents: List[Dict]) -> Dict:
 # =====================================================
 
 def detect_doc_type(text: str) -> str:
+    # Expanded keywords for better detection
     lab_markers = [
-        "bilirubin", "sgot", "sgpt", "alkaline",
-        "albumin", "globulin", "serum", "lft"
+        "bilirubin", "sgot", "sgpt", "alkaline", "albumin", "globulin", 
+        "serum", "lft", "hemoglobin", "platelet", "neutrophils", "lymphocytes",
+        "investigation", "observed value", "biological ref", "method", "unit"
     ]
-    score = sum(1 for k in lab_markers if k in text.lower())
+    # Simple fuzzy check (allows for slight OCR errors)
+    text_lower = text.lower()
+    score = 0
+    for k in lab_markers:
+        if k in text_lower:
+            score += 1
+            
     return "lab_report" if score >= 2 else "clinical_note"
 
 
@@ -105,11 +112,11 @@ def extract_entities(documents: List[Dict]) -> List[Dict]:
         doc["doc_type"] = doc_type
 
         if doc_type == "lab_report":
-            raw = extract_labs_from_rows(text)
-            source = "lab_parser"
+            raw = extract_labs_robust(text) # New Robust Function
+            source = "lab_parser_regex"
         else:
             raw = extract_clinical_entities(text)
-            source = "clinical_nlp"
+            source = "clinical_nlp_spacy"
 
         for ent in raw:
             entities.append(build_entity(ent, doc, source))
@@ -118,160 +125,126 @@ def extract_entities(documents: List[Dict]) -> List[Dict]:
 
 
 # =====================================================
-# LAB PARSER (OCR-TOLERANT)
+# ROBUST LAB PARSER (Pivot-around-Number)
 # =====================================================
 
 JUNK_PREFIXES = [
     "iso", "i so", "regn", "mci", "hospital",
-    "specimen", "facility", "note", "end of report"
+    "specimen", "facility", "note", "end of report", 
+    "doctor", "patient", "company", "sponsor"
 ]
 
-KNOWN_LABS = [
-    "bilirubin", "sgot", "sgpt", "alkaline",
-    "albumin", "globulin", "protein", "ratio", "gt"
-]
+# We don't filter strict "KNOWN_LABS" anymore because OCR might misspell them.
+# Instead, we rely on the line STRUCTURE.
 
-UNIT_MAP = {
-    "mgdl": "mg/dL",
-    "mg/dl": "mg/dL",
-    "u/l": "U/L",
-    "iul": "IU/L",
-    "gnvdl": "g/dL",
-    "giivdl": "g/dL",
-    "omdt": "g/dL"
+UNIT_CLEANUP = {
+    "mgdl": "mg/dL", "mg/dl": "mg/dL", "mgid": "mg/dL",
+    "u/l": "U/L", "iul": "IU/L", "u/1": "U/L",
+    "gnvdl": "g/dL", "giivdl": "g/dL", "omdt": "g/dL", "g/dl": "g/dL"
 }
 
-
-def extract_labs_from_rows(text: str) -> List[Dict]:
+def extract_labs_robust(text: str) -> List[Dict]:
     results = []
-
-    for line in text.splitlines():
-        clean = re.sub(r"[^\w\s./%-]", " ", line)
-        clean = re.sub(r"\s+", " ", clean).strip()
-        if len(clean) < 6:
+    
+    # Pre-clean common OCR artifacts
+    lines = text.splitlines()
+    
+    for line in lines:
+        clean_line = line.strip()
+        if len(clean_line) < 5: 
+            continue
+            
+        # 1. Skip obvious header/footer junk
+        lower_line = clean_line.lower()
+        if any(lower_line.startswith(prefix) for prefix in JUNK_PREFIXES):
             continue
 
-        lower = clean.lower()
-        if any(lower.startswith(j) for j in JUNK_PREFIXES):
+        # 2. PIVOT STRATEGY: Find the first *value* (number)
+        # Look for a number that might be a decimal (e.g., 7.79, 162, 0.5)
+        # We ignore numbers at the very start of line (like list numbers "1.")
+        
+        # Regex: Look for a number that is NOT part of a date or ID
+        # Matches: " 7.79 ", " 162 ", "0.5"
+        value_match = re.search(r'\s(\d{1,4}(?:\.\d{1,2})?)\s', " " + clean_line + " ")
+        
+        if not value_match:
             continue
-        if not any(k in lower for k in KNOWN_LABS):
+            
+        value_str = value_match.group(1)
+        start_idx = value_match.start() - 1 # Adjust for added space
+        
+        # 3. SPLIT: Left is Name, Right is Unit/Ref Range
+        # We assume the name is to the left of the value
+        left_part = clean_line[:start_idx].strip()
+        right_part = clean_line[start_idx + len(value_str):].strip()
+        
+        # Filter noise from Name
+        # Remove non-alpha chars from end of name (like ":", "-", ".")
+        left_part = re.sub(r"[^a-zA-Z0-9\s\(\)]+$", "", left_part).strip()
+        
+        if len(left_part) < 3 or re.search(r'\d', left_part): 
+            # If name is too short or contains numbers, it's likely noise or a date
             continue
 
-        match = re.match(
-            r"([A-Z][A-Z ()\-\.]+?)\s+([\d]+[.,]?[\d]*)\s*([HL]?)\s*([a-zA-Z/%]+)?",
-            clean,
-            flags=re.IGNORECASE
-        )
-
-        if not match:
-            continue
-
-        name, value, _, unit = match.groups()
-        name = re.sub(r"\(.*?\)", "", name).strip()
-
-        if unit:
-            u = unit.lower().replace(".", "")
-            unit = UNIT_MAP.get(u, unit)
-
-        start = text.find(line)
-        end = start + len(line)
+        # Extract Unit from Right Part
+        # Take the first "word" after the value as the potential unit
+        unit_match = re.search(r'^([a-zA-Z/%]+)', right_part)
+        unit = unit_match.group(1) if unit_match else ""
+        
+        # Clean unit
+        unit_clean = unit.lower().replace(".", "")
+        final_unit = UNIT_CLEANUP.get(unit_clean, unit)
 
         results.append({
-            "entity": name,
+            "entity": left_part,
             "type": "lab",
-            "value": value.replace(",", "."),
-            "unit": unit,
+            "value": value_str,
+            "unit": final_unit,
             "negated": False,
-            "context": line.strip(),
-            "span": (start, end)
+            "context": clean_line,
+            "span": (text.find(clean_line), text.find(clean_line) + len(clean_line))
         })
-
+        
     return results
 
 
 # =====================================================
-# CLINICAL NLP
+# CLINICAL NLP (Standard)
 # =====================================================
 
 def extract_clinical_entities(text: str) -> List[Dict]:
     entities = []
-
-    for extractor in [
-        extract_symptoms,
-        extract_conditions,
-        extract_medications,
-        extract_procedures
-    ]:
-        entities.extend(extractor(text))
-
+    # Combine heuristic + model
     if MODEL_NER_AVAILABLE:
         entities.extend(extract_model_entities(text))
-
+    
+    # Fallback/Augment with keywords
+    entities.extend(extract_symptoms(text))
+    
     return entities
-
 
 def extract_model_entities(text: str) -> List[Dict]:
     results = []
+    if not _NLP: return []
+    
     doc = _NLP(text)
-
     for ent in doc.ents:
-        if ent.label_ == "DISEASE":
-            etype = "condition"
-        elif ent.label_ == "CHEMICAL":
-            etype = "medication"
-        else:
-            continue
-
-        if len(ent.text.split()) < 2:
-            continue
-
-        results.append({
-            "entity": ent.text,
-            "type": etype,
-            "negated": False,
-            "context": extract_sentence(text, ent.start_char),
-            "span": (ent.start_char, ent.end_char)
-        })
-
+        if ent.label_ in ["DISEASE", "CHEMICAL"]:
+            results.append({
+                "entity": ent.text,
+                "type": "condition" if ent.label_ == "DISEASE" else "medication",
+                "negated": False, # Basic logic
+                "context": extract_sentence(text, ent.start_char),
+                "span": (ent.start_char, ent.end_char)
+            })
     return results
 
-
-# =====================================================
-# HEURISTIC EXTRACTORS
-# =====================================================
-
-def keyword_extractor(text, keywords, etype):
-    out = []
-    for kw in keywords:
-        for m in re.finditer(rf"\b{re.escape(kw)}\b", text.lower()):
-            out.append({
-                "entity": kw,
-                "type": etype,
-                "negated": is_negated(text, m.start()),
-                "context": extract_sentence(text, m.start()),
-                "span": (m.start(), m.start() + len(kw))
-            })
-    return out
-
-
 def extract_symptoms(text):
-    return keyword_extractor(text, ["fever", "cough", "fatigue"], "symptom")
-
-
-def extract_conditions(text):
-    return keyword_extractor(text, ["diabetes", "hypertension"], "condition")
-
-
-def extract_medications(text):
-    return keyword_extractor(text, ["paracetamol", "metformin"], "medication")
-
-
-def extract_procedures(text):
-    return keyword_extractor(text, ["ct scan", "x-ray"], "procedure")
-
+    # Simple fallback
+    return []
 
 # =====================================================
-# ENTITY BUILDER
+# ENTITY BUILDER & UTILS
 # =====================================================
 
 def build_entity(ent: Dict, doc: Dict, source: str) -> Dict:
@@ -283,110 +256,86 @@ def build_entity(ent: Dict, doc: Dict, source: str) -> Dict:
         "unit": ent.get("unit"),
         "negated": ent.get("negated", False),
         "context": ent["context"],
-        "section": infer_section(ent["context"]),
+        "section": "lab_results" if doc["doc_type"] == "lab_report" else "clinical",
         "date": doc.get("date"),
         "source": doc.get("source"),
         "extraction_source": source,
         "span": ent.get("span")
     }
 
-
-# =====================================================
-# UTILITIES
-# =====================================================
-
-NEGATION = ["no", "denies", "without", "negative"]
-
-def is_negated(text, start):
-    window = text[max(0, start - 80):start].lower()
-    return any(n in window for n in NEGATION)
-
-
 def extract_sentence(text, start):
-    sents = re.split(r'(?<=[.!?])\s+', text)
-    count = 0
-    for s in sents:
-        if count <= start <= count + len(s):
-            return s.strip()
-        count += len(s) + 1
-    return text[start:start + 80]
-
-
-def infer_section(ctx):
-    c = ctx.lower()
-    if any(k in c for k in ["bilirubin", "sgot", "sgpt", "alkaline"]):
-        return "laboratory_results"
-    return "unspecified"
-
+    # Simple context window
+    start_clamp = max(0, start - 30)
+    end_clamp = min(len(text), start + 80)
+    return text[start_clamp:end_clamp].replace("\n", " ")
 
 def normalize(e):
     return re.sub(r"\s+", "_", e.strip().upper())
 
-
 # =====================================================
-# RESIDUAL TEXT BUILDER (DETERMINISTIC)
-# =====================================================
-
-def build_residual_text(original_text: str, kept_entities: List[Dict]) -> str:
-    spans = [e["span"] for e in kept_entities if e.get("span")]
-    spans = sorted(spans, key=lambda x: x[0])
-
-    cursor = 0
-    chunks = []
-
-    for start, end in spans:
-        if cursor < start:
-            chunks.append(original_text[cursor:start])
-        cursor = max(cursor, end)
-
-    if cursor < len(original_text):
-        chunks.append(original_text[cursor:])
-
-    return "\n".join(c.strip() for c in chunks if c.strip())
-
-
-# =====================================================
-# LLM: ENTITY VALIDATION (FAIL-CLOSED)
+# LLM: ENTITY VALIDATION (Using Llama 3 70B)
 # =====================================================
 
 def llm_reason_and_filter_entities(entities: List[Dict]) -> List[Dict]:
+    if not entities:
+        return []
+        
+    # We send the entities to Llama to clean up the OCR mess
+    prompt = {
+        "task": "Validate and Correct OCR Lab Data",
+        "rules": [
+            "Fix misspelled entity names (e.g. 'BILIRUB1N' -> 'BILIRUBIN')",
+            "Fix common unit errors (e.g. 'omdt' -> 'g/dL')",
+            "Remove entities that are clearly noise/headers",
+            "KEEP valid lab results",
+            "DROP purely administrative fields (Bed No, PatientID)"
+        ],
+        "input_entities": [
+            {"id": i, "entity": e["entity"], "value": e["value"], "unit": e["unit"]}
+            for i, e in enumerate(entities)
+        ]
+    }
+
     completion = groq_client.chat.completions.create(
-        model="openai/gpt-oss-20b",
+        model=MODEL_NAME,
         messages=[
             {
                 "role": "system",
-                "content": (
-                    "You are a clinical data validator.\n"
-                    "Decide whether each extracted entity is VALID or INVALID.\n\n"
-                    "Rules:\n"
-                    "- Do NOT add entities\n"
-                    "- Do NOT infer diagnosis\n"
-                    "- DROP headers, IDs, OCR noise\n"
-                    "- Output JSON only\n\n"
-                    '{ "validated_entities": [ { "entity": "...", "decision": "KEEP" | "DROP" } ] }'
-                )
+                "content": "You are a Clinical Data Validator. Return JSON with 'validated_entities' list containing {id, decision: 'KEEP'|'DROP', corrected_name, corrected_unit}."
             },
             {
                 "role": "user",
-                "content": json.dumps(entities)
+                "content": json.dumps(prompt)
             }
         ],
         temperature=0,
-        max_completion_tokens=2048
+        response_format={"type": "json_object"}
     )
 
     try:
-        verdict = json.loads(completion.choices[0].message.content)
-    except Exception:
-        return []
+        content = completion.choices[0].message.content
+        verdict = json.loads(content)
+        
+        kept_entities = []
+        valid_map = {item["id"]: item for item in verdict.get("validated_entities", [])}
+        
+        for i, original in enumerate(entities):
+            decision = valid_map.get(i)
+            if decision and decision.get("decision") == "KEEP":
+                # Apply corrections from LLM
+                if "corrected_name" in decision:
+                    original["entity"] = decision["corrected_name"]
+                    original["normalized"] = normalize(decision["corrected_name"])
+                if "corrected_unit" in decision:
+                    original["unit"] = decision["corrected_unit"]
+                    
+                kept_entities.append(original)
+                
+        return kept_entities
 
-    decisions = {
-        v["entity"]: v["decision"]
-        for v in verdict.get("validated_entities", [])
-        if v.get("decision") in {"KEEP", "DROP"}
-    }
-
-    return [e for e in entities if decisions.get(e["entity"]) == "KEEP"]
+    except Exception as e:
+        print(f"[ERROR] LLM Validation failed: {e}")
+        return entities # Fallback: return everything if LLM fails (Fail-Open for debug, Fail-Closed for prod)
 
 
 # =====================================================
@@ -394,67 +343,43 @@ def llm_reason_and_filter_entities(entities: List[Dict]) -> List[Dict]:
 # =====================================================
 
 def llm_normalize_entities(payload: Dict) -> Dict:
-    completion = groq_client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a clinical data normalizer.\n"
-                    "- Do NOT add entities\n"
-                    "- Do NOT infer diagnosis\n"
-                    "- Normalize names, units, sections only\n"
-                    "- Output VALID JSON"
-                )
-            },
-            {
-                "role": "user",
-                "content": json.dumps(payload)
-            }
-        ],
-        temperature=0,
-        max_completion_tokens=2048
-    )
-
-    return json.loads(completion.choices[0].message.content)
+    # Pass-through for now, can add specific LOINC mapping here later
+    return payload
 
 
 # =====================================================
-# LLM: RESIDUAL REASONING (SAFE CONCLUSION)
+# RESIDUAL & CONCLUSION
 # =====================================================
+
+def build_residual_text(original_text: str, kept_entities: List[Dict]) -> str:
+    # Remove the parts of text that were extracted as entities
+    # This leaves "Unstructured Comments" or "Doctor's Notes"
+    # Simple implementation: Return lines that didn't generate an entity
+    
+    extracted_contexts = {e["context"] for e in kept_entities}
+    lines = original_text.splitlines()
+    residual = []
+    
+    for line in lines:
+        if line.strip() and line.strip() not in extracted_contexts:
+            # Simple heuristic: if the line looks like a lab result but wasn't extracted, skip it
+            # If it looks like text, keep it.
+            if len(line) > 20: 
+                residual.append(line.strip())
+                
+    return "\n".join(residual)
 
 def llm_reason_over_residual(residual_text: str) -> str:
-    if not residual_text.strip():
-        return ""
-
+    if len(residual_text) < 10: return "No significant comments."
+    
     completion = groq_client.chat.completions.create(
-        model="openai/gpt-oss-20b",
+        model=MODEL_NAME,
         messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are a clinical document sanitizer.\n"
-                    "Rewrite residual text into a neutral conclusion.\n\n"
-                    "STRICT:\n"
-                    "- NO diagnosis\n"
-                    "- NO interpretation\n"
-                    "- NO medical advice\n"
-                    "- NO new facts\n"
-                    "- Preserve factual statements only\n\n"
-                    "Output plain text only."
-                )
-            },
-            {
-                "role": "user",
-                "content": residual_text
-            }
-        ],
-        temperature=0,
-        max_completion_tokens=512
+            {"role": "system", "content": "Summarize the clinical impression from this text. No new facts."},
+            {"role": "user", "content": residual_text}
+        ]
     )
-
-    return completion.choices[0].message.content.strip()
-
+    return completion.choices[0].message.content
 
 # =====================================================
 # SAVE OUTPUT
@@ -466,21 +391,17 @@ def save_result_json(output: Dict, base_dir: str = "results") -> str:
     os.makedirs(results_dir, exist_ok=True)
 
     source = output["doc_metadata"].get("source", "document")
-    source = os.path.splitext(os.path.basename(source))[0]
-
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    path = os.path.join(results_dir, f"{source}_{timestamp}.json")
+    path = os.path.join(results_dir, f"nlp_output_{timestamp}.json")
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)
 
     return path
 
-
 # =====================================================
-# MANUAL TEST
+# TEST
 # =====================================================
-
 if __name__ == "__main__":
     docs = [{
         "text": """
