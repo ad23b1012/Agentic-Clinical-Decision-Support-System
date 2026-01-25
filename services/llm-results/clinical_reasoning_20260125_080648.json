@@ -1,0 +1,17 @@
+{
+  "clinical_summary": "Across three laboratory reports from March 29, 2025, September 6, 2025, and September 18, 2025, the patient’s complete blood count remained within normal limits (WBC 7,500–8,200 cells/µL, neutrophils 58–60%, hemoglobin 135 g/dL, platelets 340,000/µL). C‑reactive protein was 1.8 mg/dL on 2025-03-29 and increased to 4.2 mg/dL on 2025-09-18. Procalcitonin was low on both dates (0.13 ng/mL and 0.10 ng/mL). Total bilirubin rose from 1.4 mg/dL (direct 0.6 mg/dL) to 4.1 mg/dL (direct 0.6 mg/dL) while ALT (10 U/L) and AST (12 U/L) remained normal; alkaline phosphatase, albumin, total protein, renal function and electrolytes were all within reference ranges.",
+  "differential_diagnoses": [
+    {
+      "name": "Gilbert syndrome or benign unconjugated hyperbilirubinemia",
+      "justification": "Elevated total bilirubin (up to 4.1 mg/dL) with normal ALT/AST and normal hemoglobin suggests a non‑hepatic bilirubin processing issue."
+    },
+    {
+      "name": "Early cholestatic or biliary obstruction",
+      "justification": "Marked increase in total bilirubin with a persistently elevated direct fraction (0.6 mg/dL) despite normal alkaline phosphatase may indicate early cholestasis."
+    },
+    {
+      "name": "Hemolysis",
+      "justification": "Elevated indirect bilirubin (0.8 mg/dL) could arise from hemolysis, but lack of anemia or abnormal RBC indices makes this less likely."
+    }
+  ]
+}
