@@ -1,82 +1,84 @@
 """
-Embedding Agent
-----------------
+Embedding Agent (Full-Text + Entity Support)
+--------------------------------------------
 Responsibility:
-- Convert structured Clinical NLP JSON output into embeddings
-- NO reasoning
-- NO interpretation
-- Deterministic transformation only
-
-Embedding Model:
-- Google Gemini: text-embedding-004
+- Convert Clinical Entities -> Embeddings
+- Convert Residual Text / Conclusions -> Embeddings
 """
 
 import os
 import json
 from typing import Dict, List, Union
 from dotenv import load_dotenv
+
 load_dotenv()
-# =====================================================
-# DEPENDENCY CHECK
-# =====================================================
-
-try:
-    from google import genai
-except ImportError as e:
-    raise RuntimeError(
-        "Missing dependency: google-genai\n"
-        "Install with: pip install google-genai"
-    ) from e
-
-
-# =====================================================
-# CONFIG
-# =====================================================
+from google import genai
+from google.genai import types
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    raise RuntimeError(
-        "GEMINI_API_KEY not found.\n"
-        "Set it using:\n"
-        "  $env:GEMINI_API_KEY='your_key_here'  (PowerShell)"
-    )
-
 client = genai.Client(api_key=GEMINI_API_KEY)
-
 EMBEDDING_MODEL = "text-embedding-004"
+config = types.EmbedContentConfig(
+    output_dimensionality=768,
+    task_type="RETRIEVAL_QUERY"  # Or "RETRIEVAL_DOCUMENT" depending on your use case
+)
 
-
-# =====================================================
-# PUBLIC API
-# =====================================================
-
-def embed_clinical_json(
-    clinical_output: Union[Dict, str]
-) -> Dict:
-    """
-    Generate embeddings for Clinical NLP output.
-    """
-
+def embed_clinical_json(clinical_output: Union[Dict, str]) -> Dict:
     data = _load_json(clinical_output)
-
     entities = data.get("entities", [])
     metadata = data.get("doc_metadata", {})
-
+    
     records = []
 
+    # -------------------------------------------------
+    # 1. Embed Structured Entities
+    # -------------------------------------------------
     for ent in entities:
         text = _entity_to_text(ent)
-        if not text.strip():
-            continue
+        if not text.strip(): continue
 
         vector = _embed_text(text)
-
+        
         records.append({
             "entity": ent.get("entity"),
             "type": ent.get("type"),
             "normalized": ent.get("normalized"),
+            "value": ent.get("value"),
+            "unit": ent.get("unit"),
+            "context": ent.get("context"),
             "embedding": vector
+        })
+
+    # -------------------------------------------------
+    # 2. Embed Unstructured Text (Residuals & Conclusion)
+    # -------------------------------------------------
+    
+    # Process Residual Text (Doctor's Notes)
+    residual = data.get("residual_text", "").strip()
+    if residual and len(residual) > 10:
+        print("[DEBUG] Embedding residual text...")
+        records.append({
+            "entity": "Clinical Note",       # Generic Name
+            "normalized": "CLINICAL_NOTE",   # ID-safe Name
+            "type": "clinical_note",
+            "context": residual,             # The full text
+            "value": None,
+            "unit": None,
+            "embedding": _embed_text(residual)
+        })
+
+    # Process Conclusion (AI Summary)
+    conclusion = data.get("conclusion_text", "").strip()
+    if conclusion and len(conclusion) > 10:
+        print("[DEBUG] Embedding conclusion text...")
+        records.append({
+            "entity": "AI Summary",
+            "normalized": "AI_SUMMARY",
+            "type": "summary",
+            "context": conclusion,
+            "value": None,
+            "unit": None,
+            "embedding": _embed_text(conclusion)
         })
 
     return {
@@ -86,53 +88,29 @@ def embed_clinical_json(
     }
 
 
-# =====================================================
-# INTERNAL HELPERS
-# =====================================================
+def _entity_to_text(ent: Dict) -> str:
+    raw_context = ent.get("context", "").strip()
+    tags = [f"Entity: {ent.get('entity')}", f"Type: {ent.get('type')}"]
+    
+    if ent.get("section"):
+        tags.append(f"Section: {ent.get('section')}")
+
+    if raw_context:
+        return f"{raw_context} | {' | '.join(tags)}"
+    return " | ".join(tags)
+
 
 def _load_json(inp: Union[Dict, str]) -> Dict:
-    if isinstance(inp, dict):
-        return inp
-
+    if isinstance(inp, dict): return inp
     if isinstance(inp, str):
-        with open(inp, "r", encoding="utf-8") as f:
-            return json.load(f)
-
+        with open(inp, "r", encoding="utf-8") as f: return json.load(f)
     raise TypeError("Input must be dict or JSON file path")
 
 
-def _entity_to_text(ent: Dict) -> str:
-    """
-    Deterministic textual representation of an entity.
-    """
-
-    parts = [
-        f"Entity: {ent.get('entity')}",
-        f"Type: {ent.get('type')}"
-    ]
-
-    if ent.get("value") is not None:
-        parts.append(f"Value: {ent.get('value')}")
-
-    if ent.get("unit"):
-        parts.append(f"Unit: {ent.get('unit')}")
-
-    if ent.get("section"):
-        parts.append(f"Section: {ent.get('section')}")
-
-    return " | ".join(parts)
-
-
 def _embed_text(text: str) -> List[float]:
-    """
-    Correct Gemini embedding call (google-genai).
-    """
-
-    response = client.models.embed_content(
-        model=EMBEDDING_MODEL,
-        contents=text
-    )
-
+    # Truncate text to avoid token limits (approx 2000 chars safe for basic use)
+    safe_text = text[:8000] 
+    response = client.models.embed_content(model=EMBEDDING_MODEL, contents=safe_text, config=config)
     return response.embeddings[0].values
 
 

@@ -39,43 +39,29 @@ index = pc.Index(host=PINECONE_INDEX_URL)
 # PUBLIC API
 # =====================================================
 
+# ... (Imports and Config) ...
+
 def upsert_embeddings(embedding_output: Dict) -> Dict:
-    """
-    Upsert embeddings into Pinecone.
-
-    Input:
-    - Output from embedding.py
-
-    Output:
-    {
-        "upserted_vectors": int,
-        "index": str
-    }
-    """
-
     metadata = embedding_output.get("doc_metadata", {})
     embeddings = embedding_output.get("embeddings", [])
-
     vectors: List[Dict] = []
 
     for idx, item in enumerate(embeddings):
         vector_id = _build_vector_id(metadata, item, idx)
 
-        # ---------------------------------------------
-        # Metadata (MUST be Pinecone-safe)
-        # - No None values
-        # - Only str, int, float, bool, list[str]
-        # ---------------------------------------------
         meta = {
             "entity": item.get("entity"),
-            "type": item.get("type"),
             "normalized": item.get("normalized"),
+            "type": item.get("type"),
+            "value": item.get("value"),
+            "unit": item.get("unit"),
+            "context": item.get("context"), # <--- This will hold the full text notes
             "source": metadata.get("source"),
             "date": metadata.get("date"),
             "doc_type": metadata.get("doc_type"),
         }
-
-        #  CRITICAL FIX: remove None values
+        
+        # Remove None values
         meta = {k: v for k, v in meta.items() if v is not None}
 
         vectors.append({
@@ -84,35 +70,17 @@ def upsert_embeddings(embedding_output: Dict) -> Dict:
             "metadata": meta
         })
 
-    if not vectors:
-        return {
-            "upserted_vectors": 0,
-            "index": PINECONE_INDEX_URL
-        }
+    if vectors:
+        index.upsert(vectors=vectors)
 
-    # Perform upsert
-    index.upsert(vectors=vectors)
-
-    return {
-        "upserted_vectors": len(vectors),
-        "index": PINECONE_INDEX_URL
-    }
-
-
-# =====================================================
-# HELPERS
-# =====================================================
+    return {"upserted_vectors": len(vectors), "index": PINECONE_INDEX_URL}
 
 def _build_vector_id(metadata: Dict, item: Dict, idx: int) -> str:
-    """
-    Deterministic vector ID.
-    Format:
-    source:normalized_entity:index
-    """
-    source = metadata.get("source", "document")
-    entity = item.get("normalized", "ENTITY")
-    return f"{source}:{entity}:{idx}"
-
+    source = metadata.get("source", "doc")
+    # Fallback to "CHUNK" if normalized is missing
+    entity = item.get("normalized", "CHUNK") 
+    safe_source = source.replace(" ", "_")
+    return f"{safe_source}:{entity}:{idx}"
 
 # =====================================================
 # STANDALONE TEST
