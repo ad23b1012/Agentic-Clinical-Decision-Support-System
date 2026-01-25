@@ -1,0 +1,17 @@
+{
+  "clinical_summary": "On 2025-03-06 laboratory testing demonstrated markedly elevated conjugated bilirubin (7.79 mg/dL) with a concurrent rise in unconjugated bilirubin (1.63 mg/dL) while total bilirubin remained within normal limits; hepatic enzymes were increased (AST 162 U/L, ALT 86 U/L); cholestatic markers were markedly elevated (alkaline phosphatase 396 U/L, gamma‑GT 263 U/L); albumin was low (3.7 g/dL) with total protein 6.2 g/dL and an albumin/globulin ratio of 1.48.",
+  "differential_diagnoses": [
+    {
+      "name": "Obstructive cholestasis (e.g., biliary obstruction, gallstone, stricture)",
+      "justification": "High conjugated bilirubin, markedly elevated alkaline phosphatase and gamma‑GT support a cholestatic pattern."
+    },
+    {
+      "name": "Hepatocellular injury (e.g., viral hepatitis, drug‑induced liver injury)",
+      "justification": "Elevated AST and ALT indicate hepatocellular damage alongside cholestatic abnormalities."
+    },
+    {
+      "name": "Mixed hyperbilirubinemia (combined hemolysis and cholestasis)",
+      "justification": "Presence of both elevated unconjugated (1.63 mg/dL) and conjugated bilirubin suggests concurrent hemolytic and cholestatic processes."
+    }
+  ]
+}
