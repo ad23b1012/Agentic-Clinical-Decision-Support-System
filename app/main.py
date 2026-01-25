@@ -1,20 +1,63 @@
 from dotenv import load_dotenv
 load_dotenv()
-
+import asyncio
+from pathlib import Path
+from langchain_core.messages import HumanMessage, AIMessage  # Needed for memory
 from pathlib import Path
 from app.state import ClinicalState
 from app.orchestrator import ClinicalOrchestrator
+# from app.orchestrator import ClinicalOrchestrator
 
+async def start_chat_mode(orchestrator: ClinicalOrchestrator):
+    """
+    Runs the interactive chat loop using the Orchestrator.
+    """
+    print("\n" + "="*50)
+    print(" 🤖 CLINICAL AI READY - Ask me anything!")
+    print("    (Type 'quit' to exit)")
+    print("="*50 + "\n")
+
+    history = []
+
+    while True:
+        try:
+            user_input = input("User: ")
+            if user_input.lower() in ["quit", "exit"]:
+                print("Exiting...")
+                break
+            
+            # Call the orchestrator's new async method
+            response = await orchestrator.answer_user_query(user_input, history)
+
+            print(f"\nAI: {response['answer']}")
+            
+            # Show sources if available
+            if response.get('sources'):
+                print("\nSources:")
+                for i, s in enumerate(response['sources'], 1):
+                    url = s.get('url')
+                    link = f" ({url})" if url else ""
+                    print(f" {i}. {s['title']}{link}")
+            print("-" * 50)
+
+            # Update Memory
+            history.append(HumanMessage(content=user_input))
+            history.append(AIMessage(content=response['answer']))
+
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"[ERROR] Chat failed: {e}")
 
 def main():
     PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
     file_paths = [
         PROJECT_ROOT / "samples" / "report_1_medic.png",
-        # PROJECT_ROOT / "samples" / "report_2_medic.png",
-        # PROJECT_ROOT / "samples" / "report_3.jpeg",
-        # PROJECT_ROOT / "samples" / "report_4.jpeg",
-        # PROJECT_ROOT / "samples" / "report_5.jpeg",
+        PROJECT_ROOT / "samples" / "report_2_medic.png",
+        PROJECT_ROOT / "samples" / "report_3.jpeg",
+        PROJECT_ROOT / "samples" / "report_4.jpeg",
+        PROJECT_ROOT / "samples" / "report_5.jpeg",
     ]
 
     file_paths = [str(p) for p in file_paths if p.exists()]
@@ -43,6 +86,13 @@ def main():
         print("\n[WARNINGS]")
         for e in state.errors:
             print("-", e)
+    
+    # -------------------------------------------------
+    # 2. START INTERACTIVE CHAT
+    # -------------------------------------------------
+    # Since 'main' is synchronous, we use asyncio.run() to enter the async chat loop
+    asyncio.run(start_chat_mode(orchestrator))
+
 
 
 if __name__ == "__main__":

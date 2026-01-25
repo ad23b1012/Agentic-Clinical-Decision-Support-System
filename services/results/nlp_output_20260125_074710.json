@@ -1,0 +1,28 @@
+{
+  "doc_metadata": {
+    "source": "report_4.jpeg",
+    "date": null,
+    "doc_type": "clinical_note"
+  },
+  "entities": [
+    {
+      "entity": "Calcium",
+      "type": "medication",
+      "normalized": "CALCIUM",
+      "value": null,
+      "unit": "mmol/L",
+      "negated": false,
+      "context": "rmen $000 11000) ——— p a a OS Ca a SS TSE ROGCOUNTS nae  Packed cell volume $4.2 Mo (37 - 47)  E UROLOGY & LAP",
+      "section": "clinical",
+      "date": null,
+      "source": "report_4.jpeg",
+      "extraction_source": "clinical_nlp_spacy",
+      "span": [
+        347,
+        349
+      ]
+    }
+  ],
+  "residual_text": "Company IDAL HEALTH INS.\nSponsor UNO GENERAL INSUI {MA}\nest Method:Automated and Microscop\nPROTHROMBIN TIME AND INR.\nBC (COMPLETE BLOOD COUNT)\npe fr Founrmen $000 11000)\nPacked cell volume $4.2 Mo (37 - 47)\nE UROLOGY & LAPAROSCOPY HOSPITAL\nof Kailash, New Delhi-110068",
+  "conclusion_text": "The clinical impression appears to be related to a patient's blood test results, specifically a Complete Blood Count (CBC) and Prothrombin Time (PT) with INR, with a packed cell volume (PCV) result of 34.2, which is slightly below the normal range of 37-47."
+}

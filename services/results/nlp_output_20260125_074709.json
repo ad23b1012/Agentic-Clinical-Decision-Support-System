@@ -1,0 +1,45 @@
+{
+  "doc_metadata": {
+    "source": "report_3.jpeg",
+    "date": null,
+    "doc_type": "lab_report"
+  },
+  "entities": [
+    {
+      "entity": "Serum Sodium",
+      "type": "lab",
+      "normalized": "SERUM_SODIUM",
+      "value": "39",
+      "unit": "mmol/L",
+      "negated": false,
+      "context": "Serum Sodium 39 mmol 136-145)",
+      "section": "lab_results",
+      "date": null,
+      "source": "report_3.jpeg",
+      "extraction_source": "lab_parser_regex",
+      "span": [
+        317,
+        346
+      ]
+    },
+    {
+      "entity": "Serum Chloride",
+      "type": "lab",
+      "normalized": "SERUM_CHLORIDE",
+      "value": "06",
+      "unit": "mmol/L",
+      "negated": false,
+      "context": "Serum Chloride 06 mmo 1.98 - 107)",
+      "section": "lab_results",
+      "date": null,
+      "source": "report_3.jpeg",
+      "extraction_source": "lab_parser_regex",
+      "span": [
+        376,
+        409
+      ]
+    }
+  ],
+  "residual_text": "Company VIDAL HEALTH INS. TPA (NON GIPSA)\nSponsor : ZUNO GENERAL INSURANCE LIMITED {MA}\nBed No 1203 1 A 01:24 PM\nBC (COMPLETE BLOOD COUN\n5700 __Vcumm {4000 - 11000\nSerum Potassium rmo_3.5-5.1)\nILFT (LIVER FUNCTION TEST) - SERUM.\nCf ae Tae ASE TRS CEL",
+  "conclusion_text": "The clinical impression is not explicitly stated in the provided text. The text appears to be a hospital or medical record, listing a patient's bed number, and some laboratory test results, including complete blood count and liver function test. However, the actual clinical impression or diagnosis is not mentioned."
+}

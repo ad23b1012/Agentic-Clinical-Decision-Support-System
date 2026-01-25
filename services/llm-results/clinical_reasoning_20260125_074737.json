@@ -1,0 +1,25 @@
+{
+  "clinical_summary": "Across reports from April to July 2025, the patient demonstrated markedly elevated conjugated bilirubin (7.79 mg/dL) with raised alkaline phosphatase (396 U/L) and gamma‑glutamyl transferase (263 U/L) indicating a cholestatic pattern; transaminases were modestly increased (AST 162 U/L, ALT 86 U/L). Hematology showed early‑April eosinophilia (8.1 %) and lymphopenia (16 %), while a July CBC revealed leukocytosis (WBC 14.0 ×10³/µL) with neutrophilia (82 %) and severe thrombocytopenia (platelets 22 ×10³/µL). Electrolytes were largely normal except borderline low potassium (3.48 mmol/L).",
+  "differential_diagnoses": [
+    {
+      "name": "Obstructive biliary disease (e.g., choledocholithiasis)",
+      "justification": "High conjugated bilirubin with markedly elevated ALP and GGT suggests cholestasis due to biliary obstruction."
+    },
+    {
+      "name": "Drug‑induced cholestasis",
+      "justification": "Cholestatic LFT pattern (elevated conjugated bilirubin, ALP, GGT) can result from hepatotoxic medications."
+    },
+    {
+      "name": "Acute viral hepatitis",
+      "justification": "Elevated AST and ALT alongside bilirubin rise may reflect viral hepatic injury, though the pattern is more cholestatic."
+    },
+    {
+      "name": "Hematologic malignancy (e.g., acute leukemia)",
+      "justification": "July CBC shows leukocytosis with neutrophilia, marked thrombocytopenia, and abnormal differential, consistent with marrow infiltration."
+    },
+    {
+      "name": "Parasitic infection or allergic reaction",
+      "justification": "Early‑April eosinophilia (8.1 %) points toward an eosinophilic response such as parasitosis or hypersensitivity."
+    }
+  ]
+}
