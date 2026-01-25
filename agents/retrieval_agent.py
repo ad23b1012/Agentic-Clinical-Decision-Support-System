@@ -9,22 +9,13 @@ Responsibility:
 
 Rules:
 - NO LLM usage
-- NO reasoning
-- NO interpretation
 - Deterministic retrieval only
-
-Works with:
-- services.embedding (Gemini)
-- services.upsert (Pinecone schema)
 """
 
 from typing import List, Dict, Optional
 from pinecone import Pinecone
 import os
-
-# Gemini embedding
-from services.embedding import _embed_text  # internal but deterministic
-
+from services.embedding import _embed_text
 
 # =====================================================
 # PINECONE CONFIG
@@ -53,10 +44,6 @@ SUMMARY_TOP_K = 20
 # =====================================================
 
 class RetrieverAgent:
-    """
-    Entity-centric retriever.
-    Orchestrator decides WHICH method to call.
-    """
 
     # -------------------------------------------------
     # Mode 1: Q/A Retrieval (High Precision)
@@ -68,17 +55,15 @@ class RetrieverAgent:
         filters: Optional[Dict] = None,
         top_k: int = QA_TOP_K
     ) -> List[Dict]:
-        """
-        Retrieve entities most relevant to a user question.
-        """
-
+        
         if not query or not query.strip():
             return []
 
+        # Embed the query
         query_vector = _embed_text(query)
-
         pinecone_filter = self._build_filter(filters)
 
+        # Query Pinecone
         response = index.query(
             vector=query_vector,
             top_k=top_k,
@@ -98,16 +83,9 @@ class RetrieverAgent:
         filters: Optional[Dict] = None,
         top_k: int = SUMMARY_TOP_K
     ) -> List[Dict]:
-        """
-        Retrieve broad entity coverage for dashboard summary.
-        """
 
-        anchor_query = (
-            "clinical summary diagnosis labs medications findings history"
-        )
-
+        anchor_query = "clinical summary diagnosis labs medications findings history"
         query_vector = _embed_text(anchor_query)
-
         pinecone_filter = self._build_filter(filters)
 
         response = index.query(
@@ -125,12 +103,8 @@ class RetrieverAgent:
 # =====================================================
 
     def _build_filter(self, filters: Optional[Dict]) -> Optional[Dict]:
-        """
-        Convert simple filters into Pinecone filter.
-        """
         if not filters:
             return None
-
         return {
             k: {"$eq": v}
             for k, v in filters.items()
@@ -141,8 +115,8 @@ class RetrieverAgent:
     def _postprocess(self, matches) -> List[Dict]:
         """
         Normalize Pinecone matches.
+        UPDATED: Now extracts 'value', 'unit', and 'context'
         """
-
         results = []
 
         for m in matches:
@@ -151,17 +125,23 @@ class RetrieverAgent:
             results.append({
                 "id": m.id,
                 "score": m.score,
+                # Core Fields
                 "entity": meta.get("entity"),
                 "normalized": meta.get("normalized"),
                 "type": meta.get("type"),
+                
+                # NEW FIELDS (Critical for your Answer)
+                "value": meta.get("value"),
+                "unit": meta.get("unit"),
+                "context": meta.get("context"),
+                
+                # Metadata
                 "source": meta.get("source"),
                 "date": meta.get("date"),
                 "doc_type": meta.get("doc_type"),
             })
 
-        # Sort explicitly (Pinecone already does, but be safe)
         results.sort(key=lambda x: x["score"], reverse=True)
-
         return results
 
 
@@ -170,28 +150,29 @@ class RetrieverAgent:
 # =====================================================
 
 if __name__ == "__main__":
-
     retriever = RetrieverAgent()
 
     print("\n[TEST] Q/A Retrieval\n")
+    print("Query: 'The clinical impression is that the patient's unconjugated bilirubin level is elevated at what level?'")
 
     qa_results = retriever.retrieve_for_qa(
-        query="Is elevated SGOT indicative of liver injury?",
-        filters={"doc_type": "lab_report"}
+        query="The clinical impression is that the patient's unconjugated bilirubin level is elevated at what level?",
+        # filters={"doc_type": "lab_report"}
     )
 
     for r in qa_results:
         print("=" * 70)
-        print("Entity :", r["entity"])
-        print("Type   :", r["type"])
-        print("Score  :", r["score"])
-        print("Source :", r["source"])
-        print("Date   :", r["date"])
+        print(f"Entity : {r['entity']}")
+        print(f"Value  : {r['value']} {r['unit']}")  # <--- Now we print the value!
+        print(f"Context: {r['context']}")
+        print(f"Score  : {r['score']:.4f}")
 
+    print("\n[TEST] Summary Retrieval\n")
+    # ... (summary test code)
     print("\n[TEST] Summary Retrieval\n")
 
     summary_results = retriever.retrieve_for_summary(
-        filters={"doc_type": "lab_report"}
+        # filters={"doc_type": "lab_report"}
     )
 
     for r in summary_results:
