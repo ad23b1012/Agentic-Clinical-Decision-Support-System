@@ -1,0 +1,17 @@
+{
+  "clinical_summary": "Serial laboratory evaluations from January to July 2025 show stable complete blood counts with normal hemoglobin, RBC indices, and platelet count, and a consistently normal peripheral smear; C-reactive protein rose from 1.8 mg/dL to 4.2 mg/dL while procalcitonin remained low (0.10-0.13 ng/mL); total bilirubin increased from 1.4 mg/dL (with direct 0.6 mg/dL) to 4.1 mg/dL (direct 0.6 mg/dL) despite normal ALT (10 U/L), AST (12 U/L), alkaline phosphatase (70 U/L), albumin (3.9 g/dL) and renal function, indicating isolated hyperbilirubinemia without overt hepatic enzyme elevation.",
+  "differential_diagnoses": [
+    {
+      "name": "Gilbert syndrome",
+      "justification": "Persistent isolated elevation of total bilirubin (up to 4.1 mg/dL) with normal ALT, AST, alkaline phosphatase and absence of hemolysis or anemia suggests a benign unconjugated hyperbilirubinemia such as Gilbert syndrome."
+    },
+    {
+      "name": "Mild cholestatic or biliary obstruction",
+      "justification": "Elevated direct bilirubin (0.6 mg/dL) above reference and rising total bilirubin despite normal liver enzymes could indicate early cholestasis or biliary obstruction."
+    },
+    {
+      "name": "Low-grade inflammatory process",
+      "justification": "Increasing CRP from 1.8 to 4.2 mg/dL with low procalcitonin suggests a non‑septic inflammatory state."
+    }
+  ]
+}
