@@ -1,13 +1,13 @@
 import json
 from app.state import ClinicalState
-
+from typing import List, Dict
 from services.ingestion import ingest_files
 from services.clinical_nlp import extract_and_process, save_result_json
 from services.embedding import embed_clinical_json
 from services.upsert import upsert_embeddings
 from services.date_normalizer import update_dates_consistently
 from services.answer import run_clinical_reasoning, SYSTEM_PROMPT
-
+from app.orchestrator_mind import query_clinical_system
 
 class ClinicalOrchestrator:
     """
@@ -117,3 +117,18 @@ class ClinicalOrchestrator:
             state.add_error(f"Reasoning failed: {e}")
 
         return state
+    
+    # ==========================================================
+    # PIPELINE: ONLINE CHAT / QUERY
+    # ==========================================================
+
+    async def answer_user_query(self, query: str, chat_history: List = None) -> Dict:
+        """
+        Wraps the LangGraph reasoning engine.
+        call this from your chat interface or API.
+        """
+        if chat_history is None:
+            chat_history = []
+            
+        # Delegate to the specialized Mind Orchestrator
+        return await query_clinical_system(query, chat_history)
